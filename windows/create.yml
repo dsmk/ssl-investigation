@@ -9,6 +9,9 @@
     # m4.large: 2 cpu () 8G RAM 450 Mbps - $0.1/hr
     instance_type: "m4.large"
 
+    # This prefix defaults to the user running the playbook but can be overriden with -e user=fred
+    user: "{{ lookup('env', 'USER') }}"
+
     # this sequence # is designed to be overriden on the 
     # command line to support multiple instances.  -e number=2
     number: 1
@@ -33,9 +36,9 @@
         - check_perm
       set_fact:
         account_name: "{{ caller_info.account_alias }}"
-        stack_name: "dsmk-test-win-{{ number }}"
-        key_name: "dsmk-{{ number }}"
-        key_file_path: "./aws_ssh_key-{{ number }}.pem"
+        stack_name: "{{ user }}-test-win-{{ number }}"
+        key_name: "user-{{ user }}-{{ number }}"
+        key_file_path: "./aws_ssh_key-{{ user }}-{{ number }}.pem"
         inventory_file: "./hosts-{{ number }}.yaml"
         vpc_prefix: "app-nonprod-vpc"
         hosted_zone_name: "app-nprd.aws-cloud.bu.edu"
@@ -56,7 +59,7 @@
           VpcPrefix: "{{ vpc_prefix }}"
           HostedZoneName: "{{ hosted_zone_name }}"
           KeyPairName: "{{ key_name }}"
-          Service: "dsmk"
+          Service: "user-{{ user }}"
           Function: "sslwin"
           Landscape: "sandbox"
 

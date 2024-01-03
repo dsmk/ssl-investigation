@@ -1,0 +1,93 @@
+- name: Set up IIS configuration for testing SSL
+  hosts: all
+  gather_facts: yes
+  become_method: runas
+
+  tasks:
+
+    - name: Include the secret data
+      tags:
+        - posh
+      include_vars: ./secret.yaml
+
+    - name: Ensure that IIS feature has been installed on this system
+      ansible.windows.win_feature:
+        name: "web-server"
+        state: present
+        include_sub_features: yes
+        include_management_tools: yes
+      register: win_feature
+
+    - name: Reboot if installing Web-Server feature requires it
+      ansible.windows.win_reboot:
+      when: win_feature.reboot_required
+
+    - name: Copy over basic web page
+      ansible.windows.win_copy:
+        src: files/index.html
+        dest: 'c:\inetpub\wwwroot\index.html'
+        
+    - name: Create the directory for the IIS website
+      ansible.windows.win_file:
+        path: 'c:\inetpub\wwwroot\test'
+        state: directory
+
+    - name: Ensure Posh-ACME is installed
+      tags: posh
+      ansible.windows.win_shell: |
+          Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
+          Install-Module -Name Posh-ACME -Scope AllUsers -Force
+          Install-Module -Name Posh-ACME -Scope CurrentUser -Force
+
+    - name: Configure Posh-ACME client
+      tags: posh
+      ansible.windows.win_powershell:
+        executable: powershell.exe
+        arguments:
+          - '-ExecutionPolicy'
+          - ByPass
+        script: |
+          Set-PAServer '{{ acme_url }}'
+          New-PAAccount -AcceptTOS -ExtAcctKID '{{ acme_key_id }}' -ExtAcctHMACKey '{{ acme_hmac_key }}'
+
+    - name: Check Posh-ACME configuration
+      tags: 
+        - posh
+        - poshout
+      ansible.windows.win_shell: |
+        Get-PAServer | Format-List
+        Write-Output "Accounts"
+        Get-PAAccount | Format-List
+
+    - name: Create SSL certificate if not already there
+      tags:
+        - posh
+        - poshcert
+      ansible.windows.win_shell: |
+         new-pacertificate -domain imp.bu.edu -install
+        
+    - name: Output Posh-ACME certificates and orders
+      tags: 
+        - posh
+        - poshout
+      ansible.windows.win_shell: |
+        Write-Output "Orders"
+        Get-PAOrder | Format-List
+        Write-Output "Certificates"
+        Get-PACertificate | Format-List
+        Write-Output "Certificate Store"
+        Dir cert:\LocalMachine\My
+
+
+    # See https://www.dvolve.net/blog/2020/06/posh-acme-3.15.0/
+    # and 
+
+    # - name: Set up an SSL website
+    #   community.windows.win_iis_website:
+    #     name: TestNonSSL
+    #     state: started
+    #     port: 80
+    #     ip: '*'
+    #     hostname: '*'
+    #     physical_path: 'c:\inetpub\wwwroot\test'
+

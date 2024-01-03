@@ -1,0 +1,6 @@
+# This file contains the Sectigo ACME credentials for validation
+secret.yaml
+
+# the following are temporary files for accessing the particular windows instances
+aws_ssh_key-*.pem
+hosts-*.yaml

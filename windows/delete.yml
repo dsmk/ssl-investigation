@@ -1,0 +1,68 @@
+---
+- name: Delete windows test instance
+  hosts: localhost
+  gather_facts: false
+  vars:
+    #instance_type: "t2.small"
+    # t2.small: 1 cpu (Variable) 2G RAM Low/Mod network - $0.023/hr
+    #instance_type: "t2.small"
+    # m4.large: 2 cpu () 8G RAM 450 Mbps - $0.1/hr
+    instance_type: "m4.large"
+
+    # this sequence # is designed to be overriden on the 
+    # command line to support multiple instances.  -e number=2
+    number: 1
+
+
+  tasks:
+
+# Check that we are logged into the correct account - as a side-effect this will provide the
+    # name of the account
+    - name: "account_config- Check that you are still authorized"
+      tags:
+        - check_perm
+      amazon.aws.aws_caller_info:
+      register: caller_info
+
+    - name: Determine the variables 
+      tags:
+        - check_perm
+      set_fact:
+        account_name: "{{ caller_info.account_alias }}"
+        stack_name: "dsmk-test-win-{{ number }}"
+        key_name: "dsmk-{{ number }}"
+        key_file_path: "./aws_ssh_key-{{ number }}.pem"
+        inventory_file: "./hosts-{{ number }}.yaml"
+        vpc_prefix: "app-nonprod-vpc"
+        hosted_zone_name: "app-nprd.aws-cloud.bu.edu"
+
+    - name: Ensure that the CloudFormation Stack has been removed
+      amazon.aws.cloudformation:
+        stack_name: "{{ stack_name }}"
+        state: absent
+        region: "us-east-1"
+        template: "windows.yaml"
+        template_parameters:
+          VpcPrefix: "{{ vpc_prefix }}"
+          HostedZoneName: "{{ hosted_zone_name }}"
+          KeyPairName: "{{ key_name }}"
+          Service: "dsmk"
+          Function: "sslwin"
+          Landscape: "sandbox"
+
+    - name: Ensure that the keypair has been removed
+      amazon.aws.ec2_key:
+        name: "{{ key_name }}"
+        key_type: ed25519
+        file_name: "{{ key_file_path }}"
+        state: absent
+        
+    - name: Double-check that the private key has been removed
+      file:
+        path: "{{ key_file_path }}"
+        state: absent
+
+    - name: Ensure that the hosts file has been removed
+      file: 
+        path: "{{ inventory_file }}"
+        state: absent

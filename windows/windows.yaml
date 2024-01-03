@@ -1,0 +1,389 @@
+Description: Common EC2 resources for IAMDIR IDMS services.
+
+Parameters:
+
+  VpcPrefix:
+    Type: String
+    Description: Name of VPC Stack
+    Default: ist-iamdir-idms-nprod-r1-vpc
+
+  HostedZoneName:
+    Type: String
+    Description: Name of VPC Stack
+    Default: ist-iamdir-idms-nprod-r1-vpc
+
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the ECS instances.
+
+  EC2InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t3.small
+    AllowedValues:
+      - t3.small
+      - t2.micro
+      - t2.small
+      - t3.small
+      - t3.medium
+      - t3.large
+      - c4.large
+      - m4.large
+      - m4.xlarge
+      - m5.2xlarge
+
+  AvailabilityZone:
+    Type: String
+    Description: "Suffix to determine which AZ to ImportValues from"
+    Default: 1
+    AllowedValues:
+      - 1
+      - 2
+
+  VolumeType:
+    Description: Choose volume type for the EC2 instance
+    Type: String
+    Default: gp3
+    AllowedValues:
+    - gp2
+    - gp3
+
+  RootVolumeSize:
+    Type: Number
+    Description: 'The size of the xvdf disk (in gigabytes).  Default: 8'
+    MinValue: 50
+    Default: 580
+    MaxValue: 2048
+
+  Service:
+    Type: String
+    Description: The service this CF is used for.
+
+  Function:
+    Type: String
+    Description: The function this CF provides.
+
+  Landscape:
+    Type: String
+    Description:  The landscape (prod, nonprod, test, devl, dev, qa, syst)
+    Default: sandbox
+    AllowedValues:
+      - sandbox
+      - dev
+      - qa-r1
+      - qa-r2
+      - prod-r1
+      - prod-r2
+
+  Ticket:
+    Type: String
+    Description:  The list of tickets used in making or modifying this CF.
+    Default: "None"
+
+# The following describe-images example describes Windows  AMIs  provided
+#        by Amazon that are backed by Amazon EBS.
+
+#           aws ec2 describe-images \
+#               --owners amazon \
+#               --filters "Name=platform,Values=windows" "Name=root-device-type,Values=ebs"
+
+#        For an example of the output for describe-images, see Example 1.
+
+# aws ec2 describe-images --owners amazon --filters "Name=name,Values=Windows_Server-2022-English-Full-EKS_Optimized-1.26*"  --query 'Images[*].[Name,ImageId]'
+
+# Name prefixes:
+# Windows_Server-2022-English-Full-SQL_2019*
+# Windows_Server-2022-English-Full-SQL_2022*
+# Windows_Server-2022-English-Core-ECS*
+# Windows_Server-2022-English-Full-EKS_Optimized-1.26*  (used for this mapping)
+# 
+#
+Mappings:
+  RegionMap:
+    us-east-1:
+      '64': ami-0c9d7052f09149bfe
+    # us-east-2:
+    #   '64': ami-0ba62214afa52bec7
+
+Resources:
+  WinEC2LaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpPutResponseHopLimit: 1
+          HttpTokens: required
+
+  WinIAMRoleInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+        - Ref: WinSSMandS3Role
+
+  WinSSMandS3Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${AWS::StackName}-role"
+      Description: "Windows Test Instance"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonSSMFullAccess'
+        - 'arn:aws:iam::aws:policy/AmazonEC2ReadOnlyAccess'
+        - 'arn:aws:iam::aws:policy/AmazonS3FullAccess'
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-role"
+        - Key: Service
+          Value: !Ref Service
+        - Key: Landscape
+          Value: !Ref Landscape
+        - Key: Function
+          Value: !Ref Function
+
+  WinSecurityGroup:
+    Type:  AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: 
+        "Fn::ImportValue": !Sub "${VpcPrefix}-VPCID"
+      GroupDescription: "Additional rules for test windows servers"
+      SecurityGroupIngress:  
+        - CidrIp: 168.122.88.0/24
+          Description: "HTTPS WINRM - On-Campus AD-ADMIN VPN"
+          IpProtocol: tcp
+          FromPort: 5986
+          ToPort: 5986
+        - CidrIp: 168.122.75.0/24
+          Description: "HTTPS WINRM - Off-Campus AD-ADMIN VPN"
+          IpProtocol: tcp
+          FromPort: 5986
+          ToPort: 5986
+        - CidrIp: 168.122.88.0/24
+          Description: "HTTPS IIS - On-Campus AD-ADMIN VPN"
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+        - CidrIp: 168.122.75.0/24
+          Description: "HTTPS IIS - Off-Campus AD-ADMIN VPN"
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+        - CidrIp: 10.231.32.201/32
+          Description: "HTTPS IIS - ist-aws-toolbox.bu.edu"
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+        - CidrIp: 168.122.88.0/24
+          Description: "HTTP IIS - On-Campus AD-ADMIN VPN"
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIp: 168.122.75.0/24
+          Description: "HTTP IIS - Off-Campus AD-ADMIN VPN"
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIp: 10.231.32.201/32
+          Description: "HTTP IIS - ist-aws-toolbox.bu.edu"
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIp: 168.122.88.0/24
+          Description: "HTTPS IISADMIN - On-Campus AD-ADMIN VPN"
+          IpProtocol: tcp
+          FromPort: 8172
+          ToPort: 8172
+        - CidrIp: 168.122.75.0/24
+          Description: "HTTPS IISADMIN - Off-Campus AD-ADMIN VPN"
+          IpProtocol: tcp
+          FromPort: 8172
+          ToPort: 8172
+        - CidrIp: 10.231.32.201/32
+          Description: "HTTPS IISADMIN - ist-aws-toolbox.bu.edu"
+          IpProtocol: tcp
+          FromPort: 8172
+          ToPort: 8172
+        # - CidrIp: 168.122.88.0/24
+        #   Description: "HTTP WINRM - On-Campus AD-ADMIN VPN"
+        #   IpProtocol: tcp
+        #   FromPort: 5985
+        #   ToPort: 5985
+        # - CidrIp: 168.122.75.0/24
+        #   Description: "HTTP WINRM - Off-Campus AD-ADMIN VPN"
+        #   IpProtocol: tcp
+        #   FromPort: 5985
+        #   ToPort: 5985
+        # - CidrIp: 10.231.32.201/32
+        #   Description: "HTTP WINRM - ist-aws-toolbox.bu.edu"
+        #   IpProtocol: tcp
+        #   FromPort: 5985
+        #   ToPort: 5985
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-sg"
+        - Key: Service
+          Value: !Ref Service
+        - Key: Landscape
+          Value: !Ref Landscape
+        - Key: Function
+          Value: !Ref Function
+             
+  WinEC2Instance:
+    Type: AWS::EC2::Instance
+    DependsOn:
+      - WinSSMandS3Role
+      - WinIAMRoleInstanceProfile
+    Properties:
+      InstanceType: !Ref EC2InstanceType
+      KeyName: !Ref KeyPairName
+      ImageId: !FindInMap
+        - RegionMap
+        - !Ref 'AWS::Region'
+        - '64'
+      AvailabilityZone: 
+        "Fn::ImportValue":  !Sub "${VpcPrefix}-AvailabilityZone${AvailabilityZone}"
+      BlockDeviceMappings:
+      - DeviceName: /dev/sda1
+        Ebs:
+          VolumeType: !Ref VolumeType
+          VolumeSize: !Ref RootVolumeSize
+          # Iops: !Ref IOPS
+          DeleteOnTermination: 'false'
+          Encrypted: 'true'
+      SecurityGroupIds:
+        - Ref: WinSecurityGroup
+        - Fn::ImportValue: !Sub "${VpcPrefix}-CommonDefault-sg"
+      SubnetId:
+        Fn::ImportValue: !Sub "${VpcPrefix}-CampusSubnet${AvailabilityZone}ID"
+      IamInstanceProfile:
+        Ref: WinIAMRoleInstanceProfile
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${AWS::StackName}-ec2"
+        - Key: Service
+          Value: !Ref Service
+        - Key: Landscape
+          Value: !Ref Landscape
+        - Key: Function
+          Value: !Ref Function
+      UserData:
+        "Fn::Base64": |
+          <powershell>
+          Set-NetFirewallProfile -Profile Domain, Public, Private -Enabled False
+          $url = "https://raw.githubusercontent.com/AlbanAndrieu/ansible-windows/master/files/ConfigureRemotingForAnsible.ps1"
+          $file = "$env:temp\ConfigureRemotingForAnsible.ps1"
+          (New-Object -TypeName System.Net.WebClient).DownloadFile($url, $file)
+          powershell.exe -ExecutionPolicy ByPass -File $file
+          </powershell>
+      # LaunchTemplate:
+      #   LaunchTemplateId: !ImportValue EC2LaunchTemplate
+      #   Version: !ImportValue EC2LaunchTemplateVersion
+
+  
+  RecordSet:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Comment: !Sub Hostname for ${AWS::StackName}.
+      Name: !Sub "${AWS::StackName}.${HostedZoneName}."
+      HostedZoneName: !Sub "${HostedZoneName}."
+      ResourceRecords:
+        - !GetAtt WinEC2Instance.PrivateIp
+      Type: A
+      TTL: 120
+
+  # EC2Instance:
+  #   Type: AWS::EC2::Instance
+  #   Metadata:
+  #     AWS::CloudFormation::Init:
+  #       config:
+  #         packages:
+  #           yum:
+  #             sysstat: []
+  #         commands:
+  #           update_packages:
+  #             command: yum update --assumeyes
+  #   Properties:
+  #     IamInstanceProfile:
+  #       "Fn::ImportValue": !Sub "${Prefix}-instance-profile"
+  #     InstanceType: !Ref EC2InstanceType
+  #     PrivateIpAddress: !Ref PrimaryIpAddress
+  #     KeyName: !Ref KeyPairName
+  #     ImageId: !FindInMap
+  #       - RegionMap
+  #       - !Ref 'AWS::Region'
+  #       - '64'
+  #     BlockDeviceMappings:
+  #     - DeviceName: /dev/sda1
+  #       Ebs:
+  #         VolumeType: !Ref VolumeType
+  #         VolumeSize: !Ref RootVolumeSize
+  #         Iops: !Ref IOPS
+  #         DeleteOnTermination: 'true'
+  #         Encrypted: 'true'
+  #     SecurityGroupIds:
+  #       - Fn::ImportValue: !Sub ${Prefix}-${ServerType}-ec2-sg
+  #       - Fn::ImportValue: !Sub ${VPCPrefix}-SSHDefault-sg
+  #       - Fn::ImportValue: !Sub ${VPCPrefix}-CommonDefault-sg
+  #       - Fn::ImportValue: !Sub ${Prefix}-${Function}-ec2-sg
+  #     SubnetId:
+  #       Fn::ImportValue: !Sub "${VPCPrefix}-${SubnetName}"
+  #     LaunchTemplate:
+  #       LaunchTemplateId:
+  #         Fn::ImportValue: !Sub ${Prefix}-ec2-launch-template
+  #       Version:
+  #         Fn::ImportValue: !Sub ${Prefix}-ec2-launch-template-version
+
+  #     UserData:
+  #       'Fn::Base64':
+  #         !Sub |
+  #           #!/bin/bash
+  #           /usr/bin/hostnamectl set-hostname ${InstanceName}.bu.edu
+  #           hostname
+  #           sudo dnf install -y https://s3.${AWS::Region}.amazonaws.com/amazon-ssm-${AWS::Region}/latest/linux_amd64/amazon-ssm-agent.rpm
+  #           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+  #           echo "#### before unzip ####"
+  #           sudo yum -y install unzip
+  #           sudo unzip -qq awscliv2.zip
+  #           sudo ./aws/install
+  #           echo "#### after awscli install ####"
+  #           sudo yum -y install python3
+  #           timedatectl set-timezone America/New_York
+  #           cat >> /root/.ssh/authorized_keys << EOF
+  #           ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDCzD5gQ267W0eSK4+tD/MfvjzgKJkorTbQ7C8QLKytx8E/wFJcElzd16YaxDFZ+XPHYnBBiVzT7nSb5PiEL27K8w+4Ck5j6O3z60OcxIKk7+/kOT7M04R6cOt0lGtteFyCPc4QvHo1GoYmXkknvRHMpHFNhQl5qcuzhN/tTmCNeJae7V9QrCCN6EfnRTEyBK7trG0FlTCrMdViD+MIL/jUFqIImD/tY8T0AflQuhoecyxTsSzXL4vup7b5NcID0Od9Q2sLo4kE71JbVr+WP1GsgvfCXBTyMq0YfUfrn1MFD2/cTbcHIzJ6lTXxSS+XmtSTrCkk9vX3arKUbZY+WeTX6Wo+q0AALh0z6M0Ky+KYKcjksMNX3FBjsbTxqfUSHKGYCEYnVWTVlw0mr7VLAmNNXHPXAH4KWTtR1uQhE9yhqPALDEgQcT7ZIV6wqD/1Gp53oIoQvnEbyQJpMzAo3+yaQKe8rKt3r2Fbf7kGbA38IK3krdA5PMXvH+3OrLkNW6c= root@ist-sys-jump01.bu.edu
+  #           ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAgEAq92fZV0s4FZnpRGHS2OqiR1Q9C0x/VPj+mHJGu/FK4yMD5x3y2Bc8xYB1C7eX7Sz3SEyz6V0hQ8sw/zXPnpv0w4VEzFAqZw2NX2rRe4GgP60UP1vfkzIBS+BxkG4jvab3MuoQlGvffNBCXfYEQ2Rfa7VMDsLtpnWSYlT8OpVxT92LSKAnnI5/GXvtN6FpcjlzekjwLE1ody9BBm+6c/ZPaiXDZUCY5a/6kNvQHfAs0mprI7LtU1es31Pne/vBqoi9e4CvXrSwKbLEpjQ4w63ZDj4ZU8l0euiblwz3KAHtPMYyhAddCKg+ODMGrEGK2/lBeMGzRB6LzeNyK+SqfMNBwql6x7wNAES7MAboJL38A/skvtACb6tDxZH2Kc6RRjcK4jMdBCCYxYlk1PSJaEVG0xjXZr8vqmT0ANlJSh4AyTX7CJH4SpSZ56ECDs4mkclr+NZ/lA+/vtDTXF5hKBk+8l16c+R9sOsJEB4AM2YJwH35OLSCmqWg3LSSU+t/N4PRXHF5Rnr5zHnQSPJ4EKurZt066laapLMGmFdTFZ0pMNF0iJKVrjZtGkqRkgyCsqRywojN68jj2SkevGDZJUc7iIQmo48LjSdqr1EM2cvC9GxqpAZG2hERi9hl1ryj6XzLAljyLxXXfT4T42W+8tDuxYlkT6J6wQrFuvqjTdT/Zc= root@relay7.bu.edu
+  #           EOF
+  #           # /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource EC2Instance --region ${AWS::Region}
+
+  #     Tags:
+  #       - Key: "Name"
+  #         Value: !Ref InstanceName
+  #       - Key: Service
+  #         Value: !Ref Service
+  #       - Key: Landscape
+  #         Value: !Ref Landscape
+  #       - Key: Function
+  #         Value: !Ref Function
+  #       - Key: backup
+  #         Value: !Ref 'BackupGroup'
+
+Outputs:
+  EC2Instance:
+    Description: InstanceId of the newly created EC2 instance
+    Value: !Ref WinEC2Instance
+    Export:
+      Name: !Sub ${AWS::StackName}-id
+  EC2InstanceIP:
+    Description: InstanceId of the newly created EC2 instance
+    Value: !GetAtt WinEC2Instance.PrivateIp
+    Export:
+      Name: !Sub ${AWS::StackName}-ip

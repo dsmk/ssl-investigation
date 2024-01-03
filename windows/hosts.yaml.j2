@@ -1,0 +1,12 @@
+---
+# This is the YAML format hosts file since we will need parameters
+# for 
+all:
+  hosts:
+      "{{ stack_name }}":
+        ansible_host: "{{ instance_ip }}"
+        ansible_user: "Administrator"
+        ansible_password: "{{ adminpw.win_password }}"
+        ansible_port: 5986
+        ansible_connection: winrm
+        ansible_winrm_server_cert_validation: ignore

@@ -6,7 +6,8 @@ account but should theoretically work with other AWS accounts.
 
 ## Posh-ACME (`setup-posh-acme.yaml``)
 
-This sets up IIS with Posh-ACME.  Right now it activates IIS, installs/configures Posh-ACME, and then does a hard-coded hostname certificate.
+This sets up IIS with Posh-ACME.  Right now it activates IIS, installs/configures Posh-ACME, and then creates a hard-coded hostname certificate.  It still
+needs to configure IIS with it and be converted to the hostname of the temp test box.
 
 ```bash
 (aws) $ ansible-playbook -i hosts-1.yaml setup-posh-acme.yaml -vv 

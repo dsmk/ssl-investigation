@@ -26,13 +26,15 @@
       ansible.windows.win_copy:
         src: files/index.html
         dest: 'c:\inetpub\wwwroot\index.html'
-        
+
     - name: Create the directory for the IIS website
       ansible.windows.win_file:
         path: 'c:\inetpub\wwwroot\test'
         state: directory
 
     - name: Ensure Posh-ACME is installed
+      # become: yes
+      # become_user: ssm-user
       tags: posh
       ansible.windows.win_shell: |
           Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
@@ -41,6 +43,8 @@
 
     - name: Configure Posh-ACME client
       tags: posh
+      # become: yes
+      # become_user: ssm-user
       ansible.windows.win_powershell:
         executable: powershell.exe
         arguments:
@@ -51,7 +55,9 @@
           New-PAAccount -AcceptTOS -ExtAcctKID '{{ acme_key_id }}' -ExtAcctHMACKey '{{ acme_hmac_key }}'
 
     - name: Check Posh-ACME configuration
-      tags: 
+      # become: yes
+      # become_user: ssm-user
+      tags:
         - posh
         - poshout
       ansible.windows.win_shell: |
@@ -60,14 +66,18 @@
         Get-PAAccount | Format-List
 
     - name: Create SSL certificate if not already there
+      # become: yes
+      # become_user: ssm-user
       tags:
         - posh
         - poshcert
       ansible.windows.win_shell: |
          new-pacertificate -domain imp.bu.edu -install
-        
+
     - name: Output Posh-ACME certificates and orders
-      tags: 
+      # become: yes
+      # become_user: ssm-user
+      tags:
         - posh
         - poshout
       ansible.windows.win_shell: |
@@ -80,7 +90,7 @@
 
 
     # See https://www.dvolve.net/blog/2020/06/posh-acme-3.15.0/
-    # and 
+    # and
 
     # - name: Set up an SSL website
     #   community.windows.win_iis_website:
@@ -90,4 +100,3 @@
     #     ip: '*'
     #     hostname: '*'
     #     physical_path: 'c:\inetpub\wwwroot\test'
-

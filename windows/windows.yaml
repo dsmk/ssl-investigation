@@ -52,7 +52,7 @@ Parameters:
     Type: Number
     Description: 'The size of the xvdf disk (in gigabytes).  Default: 8'
     MinValue: 50
-    Default: 580
+    Default: 80
     MaxValue: 2048
 
   Service:
@@ -213,21 +213,21 @@ Resources:
           IpProtocol: tcp
           FromPort: 8172
           ToPort: 8172
-        # - CidrIp: 168.122.88.0/24
-        #   Description: "HTTP WINRM - On-Campus AD-ADMIN VPN"
-        #   IpProtocol: tcp
-        #   FromPort: 5985
-        #   ToPort: 5985
-        # - CidrIp: 168.122.75.0/24
-        #   Description: "HTTP WINRM - Off-Campus AD-ADMIN VPN"
-        #   IpProtocol: tcp
-        #   FromPort: 5985
-        #   ToPort: 5985
-        # - CidrIp: 10.231.32.201/32
-        #   Description: "HTTP WINRM - ist-aws-toolbox.bu.edu"
-        #   IpProtocol: tcp
-        #   FromPort: 5985
-        #   ToPort: 5985
+        - CidrIp: 168.122.88.0/24
+          Description: "RDP - On-Campus AD-ADMIN VPN"
+          IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+        - CidrIp: 168.122.75.0/24
+          Description: "RDP - Off-Campus AD-ADMIN VPN"
+          IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
+        - CidrIp: 10.231.32.201/32
+          Description: "RDP - ist-aws-toolbox.bu.edu"
+          IpProtocol: tcp
+          FromPort: 3389
+          ToPort: 3389
       Tags:
         - Key: "Name"
           Value: !Sub "${AWS::StackName}-sg"
@@ -258,7 +258,7 @@ Resources:
           VolumeType: !Ref VolumeType
           VolumeSize: !Ref RootVolumeSize
           # Iops: !Ref IOPS
-          DeleteOnTermination: 'false'
+          DeleteOnTermination: 'true'
           Encrypted: 'true'
       SecurityGroupIds:
         - Ref: WinSecurityGroup
